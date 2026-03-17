@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import SearchBar from "./components/SearchBar";
 import Controls from "./components/Controls";
 import ResultsList from "./components/ResultsList";
 import SettingsLink from "./components/SettingsLink";
+import * as chromeMessage from "./chromeMessage";
 
 // PUBLIC_INTERFACE
 function App() {
@@ -11,44 +12,38 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Request search from background via Chrome runtime messaging
+  // Request search from background via Chrome runtime messaging (MV3-safe)
   const handleSearch = (searchQuery) => {
     setLoading(true);
     setError(null);
-
-    // Only proceed if query is not empty
     if (!searchQuery.trim()) {
       setLoading(false);
       setResults([]);
       return;
     }
-
-    // MV3 Messaging: request search
-    chrome.runtime.sendMessage(
-      {
-        type: "SEARCH",
-        payload: { query: searchQuery },
-      },
-      (response) => {
+    chromeMessage
+      .sendMessage({ type: "SEARCH", payload: { query: searchQuery } })
+      .then((response) => {
         setLoading(false);
-        if (chrome.runtime.lastError) {
-          setError("Error: Could not connect to extension background script.");
-          setResults([]);
-        } else if (response?.error) {
-          setError(response.error);
+        if (!response || response.error) {
+          setError(response?.error || "Background unavailable");
           setResults([]);
         } else {
-          setResults(response?.results || []);
+          setResults(response.results || []);
         }
-      }
-    );
+      })
+      .catch((err) => {
+        setLoading(false);
+        setError("Error: Could not connect to extension background script.");
+        setResults([]);
+      });
   };
 
   // Optionally, handle indexing trigger
   const handleIndex = () => {
-    chrome.runtime.sendMessage({ type: "INDEX" }, (response) => {
-      // Show some brief feedback
-      // You might want to surface response messages
+    chromeMessage.sendMessage({ type: "INDEX" }).then((resp) => {
+      // Optionally show feedback in UI later
+      // e.g. setError(resp && resp.error ? resp.error : null)
     });
   };
 
